@@ -64,6 +64,7 @@ make_tea_data <- function(n_total = 48,
 ```{r}
 # here's, we're calling our custom function, and specifying different inputs than the defaults (which are inside the parenthese up above)
 tea_data <- make_tea_data(n_total = 18, delta = .5)
+tea_data_highn <- make_tea_data(n_total = 48, delta = .5)
 ```
 
 Now, make a new data frame (call it tea_data_highn) with an N of 48, or something higher if you want. You need to call the custom function.
@@ -75,8 +76,16 @@ Call `summary(tea_data)` and look at the outputs. Call `head(tea_data)` to look 
 To do: Write basic tidyverse code to calculate the mean of each condition (hint: use `group_by` and `summarize`).
 
 ```{r}
+bycondition <- tea_data %>%
+  group_by(condition) %>%
+  summarize(m.rating = mean(rating),
+             n.participants = length(rating))
 
  
+bycondition_highn <- tea_data_highn %>%
+  group_by(condition) %>%
+  summarize(m.rating_highn = mean(rating),
+            n.participants_highn = length(rating))
 ```
 
 ## In this first draw, was it significant with N=9 or N=24 per group?
@@ -97,6 +106,10 @@ out_high_n <- tea_data_highn %>%
   t.test(rating ~ condition, data = ., var.equal = TRUE) 
 ```
 
+**Output:**
+
+-   A two-sample t-test revealed a significant difference between milk-first and tea-first tea, t(`r out_high_n$parameter` = `r out_high_n$statistic`, p = `r out_high_n$p.vlaue` \
+
 ### Simulate 1000 experiments
 
 Now let's simulate 1000 experiments...where you have 18 participants per experiment with an average difference of 1.5 points in tea deliciousness on average
@@ -112,7 +125,9 @@ samps <- tibble(sim = 1:1000) |>
 OK, copy this but now change it so that you 48 participants per experiment
 
 ```{r}
-samps_highn <-...
+samps_highn <-tibble(sim = 1:1000) |>
+  mutate(data = map(sim, \(i)make_tea_data(n_total = 48, delta = 1.5))) |>
+  unnest(cols = data)
 ```
 
 ### Summarize both of these simulations
@@ -127,20 +142,24 @@ Bonus: Figure out a way to do this that is better than I what I did (some mix of
 
 ```{r}
 tea_data_summary <- samps |>
-  group_by(sim, condition) |> 
-  summarise(mean_rating = mean(rating)) |> 
-  group_by(sim) |> 
-  summarise(delta = mean_rating[condition == "milk first"] -
-              mean_rating[condition == "tea first"])
+  group_by(sim, condition) |> #group together conditions by simulation # 
+  summarise(mean_rating = mean(rating)) |> #column for avg rating for each condition by sim
+  group_by(sim) |> #group together the simulations
+  summarise(delta = mean_rating[condition == "milk first"] - 
+              mean_rating[condition == "tea first"]) #find the average difference btwn conditions
+
+#creates df consisting of 2 columns: sim number and avg rating of milk first - tea first 
 ```
 
 ```{r}
 tea_data_highn_summary <- samps_highn |>
-  group_by(sim, condition) |> 
-  summarise(mean_rating = mean(rating)) |> 
-  group_by(sim) |> 
+  group_by(sim, condition) |> #group together conditions by simulation # 
+  summarise(mean_rating = mean(rating)) |> #column for avg rating for each condition by sim
+  group_by(sim) |> #group together the simulations
   summarise(delta = mean_rating[condition == "milk first"] -
-              mean_rating[condition == "tea first"])
+              mean_rating[condition == "tea first"]) #find the average difference btwn conditions
+
+#creates df consisting of 2 columns: sim number and avg rating of milk first - tea first 
 ```
 
 ### Plot difference for low-n
@@ -148,6 +167,8 @@ tea_data_highn_summary <- samps_highn |>
 Let's make a plot to plot the differences in ratings across conditions for the low-n condition. You'll need to use ggplot or `hist`
 
 ```{r}
+ggplot(data = tea_data, aes(x=rating)) +
+       geom_histogram(alpha = 0.8, bins = 15)
 
 ```
 
@@ -156,7 +177,13 @@ Let's make a plot to plot the differences in ratings across conditions for the l
 To do: What's different about this distribution vs the one we just plotted?
 
 ```{r}
+ggplot(data = tea_data_highn, aes(x=rating)) +
+       geom_histogram(alpha = 0.8, bins = 15)
+```
 
+```{r}
+ggplot(data = tea_data_summary, aes(x=delta)) +
+       geom_histogram(alpha = 0.8, bins = 15)
 ```
 
 **Bonus** What happens if you run it again, but this time try changing the variance / mean of the effect when you change the `delta` and `sigma` values in the data simulation.
@@ -175,13 +202,23 @@ First, do the same thing as you did before - simulating 1000 experiments -- but 
 
 ```{r}
 # Simulate the null distribution
-  
+nullmodel <- tibble(sim = 1:1000) |> 
+  mutate(data = map(sim, \(i) make_tea_data(n_total = 18, delta = 0))) |>  # simulate
+  unnest(cols = data) # wrangle
+
+nullmodel_summary <- nullmodel |>
+  group_by(sim, condition) |> #group together conditions by simulation # 
+  summarise(mean_rating = mean(rating)) |> #column for avg rating for each condition by sim
+  group_by(sim) |> #group together the simulations
+  summarise(delta = mean_rating[condition == "milk first"] - 
+              mean_rating[condition == "tea first"]) 
 ```
 
 Visualize what this null distribution actually looks like.
 
 ```{r}
-
+ggplot(data = nullmodel_summary, aes(x=delta)) +
+       geom_histogram(alpha = 0.8, bins = 15)
 ```
 
 ### Method 2: Shuffling
@@ -198,6 +235,8 @@ tea_data_highn_shuffled <- samps_highn %>%
 
 To do: check you understanding -- what is "sim" here?
 
+Sim is the number of simulations (1000).
+
 ```{r}
 tea_data_highn_shuffled_summary <- tea_data_highn_shuffled %>%
   group_by(condition_shuffled, sim) %>% 
@@ -212,6 +251,8 @@ tea_data_highn_shuffled_summary <- tea_data_highn_shuffled_summary %>%
 ```
 
 To do: what does this histogram look like and why?
+
+It looks like a normal curve with the mean slightly to the left of 0.0.
 
 ```{R}
 hist(tea_data_highn_shuffled_summary$delta) #what does this histogram look like?
@@ -408,25 +449,24 @@ To do: Find the shortcut ggplot function so you don't have to calculate these by
 
 # Part 4: Simulating p-values across multiple experiments
 
-To do: Comment what the lines of code are doing 
-### When there is no actual effect
+To do: Comment what the lines of code are doing \### When there is no actual effect
 
 ```{r}
-all_results=tibble() 
+#all_results=tibble() 
 
-for (this_sim in 1:1000) {
-  this_experiment = null_model %>%
-    filter(sim==this_sim) 
+#for (this_sim in 1:1000) {
+#  this_experiment = null_model %>%
+#    filter(sim==this_sim) 
   
-  tea_ratings <- filter(this_experiment, condition == "tea first")$rating
-  milk_ratings <- filter(this_experiment, condition == "milk first")$rating
+#  tea_ratings <- filter(this_experiment, condition == "tea first")$rating
+#  milk_ratings <- filter(this_experiment, condition == "milk first")$rating
   
-  output = t.test(tea_ratings, milk_ratings)
+#  output = t.test(tea_ratings, milk_ratings)
   
-  this_exp_output = tibble(pvalue = output$p.value)
-  all_results = bind_rows(all_results, this_exp_output)
+#  this_exp_output = tibble(pvalue = output$p.value)
+#  all_results = bind_rows(all_results, this_exp_output)
     
-}
+#}
 ```
 
 To do: Look at the distribution of p-values (hint: in all_results\$pvalue)
@@ -439,27 +479,27 @@ Calculate the proportion of p-values that are less than .05 What was our false p
 
 ```{r}
 # you'll need all_results$pvalue
-hist(all_results$pvalue)
+#hist(all_results$pvalue)
 ```
 
 ### Now for an experiment when there is actually an effect
 
 ```{r}
-all_results_high_n=tibble() 
-
-for (this_sim in 1:500) {
-  this_experiment = samps_highn %>%
-    filter(sim==this_sim) 
-  
-  tea_ratings <- filter(this_experiment, condition == "tea first")$rating
-  milk_ratings <- filter(this_experiment, condition == "milk first")$rating
-  
-  output = t.test(tea_ratings, milk_ratings, paired = FALSE, var.equal = TRUE)
-  
-  this_exp_output = tibble(pvalue = output$p.value)
-  all_results_high_n = bind_rows(all_results_high_n, this_exp_output)
-    
-}
+#all_results_high_n=tibble() 
+# 
+# for (this_sim in 1:500) {
+#   this_experiment = samps_highn %>%
+#     filter(sim==this_sim) 
+#   
+#   tea_ratings <- filter(this_experiment, condition == "tea first")$rating
+#   milk_ratings <- filter(this_experiment, condition == "milk first")$rating
+#   
+#   output = t.test(tea_ratings, milk_ratings, paired = FALSE, var.equal = TRUE)
+#   
+#   this_exp_output = tibble(pvalue = output$p.value)
+#   all_results_high_n = bind_rows(all_results_high_n, this_exp_output)
+#     
+# }
 ```
 
 How often did we fail to reject the null hypothesis? When was our p-value greater than p=.05? What does the distribution of p-values look like?
